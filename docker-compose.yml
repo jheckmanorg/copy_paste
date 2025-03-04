@@ -1,0 +1,94 @@
+services:
+  db:
+    image: postgres:17.2-alpine
+    environment:
+      POSTGRES_DB: copy_paste
+      POSTGRES_USER: copy_paste
+      POSTGRES_PASSWORD: development_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copy_paste"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  makemigrations:
+    build: .
+    command: sh -c "python manage.py makemigrations"
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://copy_paste:development_password@db:5432/copy_paste
+      - DJANGO_SETTINGS_MODULE=copy_paste.settings
+      - DJANGO_SECRET_KEY=development_secret_key_not_for_production
+      - PYTHONUNBUFFERED=1
+      - ENABLE_DATA_VIEWER=True
+    user: "${UID:-1000}:${GID:-1000}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  migration:
+    build: .
+    command: python manage.py migrate
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://copy_paste:development_password@db:5432/copy_paste
+      - DJANGO_SETTINGS_MODULE=copy_paste.settings
+      - DJANGO_SECRET_KEY=development_secret_key_not_for_production
+      - PYTHONUNBUFFERED=1
+    user: "${UID:-1000}:${GID:-1000}"
+    depends_on:
+      makemigrations:
+        condition: service_completed_successfully
+
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgresql://copy_paste:development_password@db:5432/copy_paste
+      - DJANGO_SETTINGS_MODULE=copy_paste.settings
+      - DJANGO_SECRET_KEY=development_secret_key_not_for_production
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+
+  test:
+    build: .
+    command: pytest
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://copy_paste:development_password@db:5432/copy_paste
+      - DJANGO_SETTINGS_MODULE=copy_paste.settings
+      - DJANGO_SECRET_KEY=development_secret_key_not_for_production
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+
+  delete_expired_pastes:
+    build: .
+    command: python manage.py delete_expired_pastes
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://copy_paste:development_password@db:5432/copy_paste
+      - DJANGO_SETTINGS_MODULE=copy_paste.settings
+      - DJANGO_SECRET_KEY=development_secret_key_not_for_production
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:

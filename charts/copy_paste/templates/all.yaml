@@ -1,0 +1,19 @@
+{{- include "common.serviceaccount" . }}
+---
+
+{{- include "common.secrets" . }}
+---
+
+{{- include "common.service" . }}
+---
+
+{{- include "common.deployment" . }}
+---
+
+{{- include "common.ingress" . }}
+---
+
+{{- include "common.cronjobs" . }}
+---
+
+{{- include "common.init-job" . }}

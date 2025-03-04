@@ -1,0 +1,155 @@
+replicaCount: 1
+
+imagePullSecrets: []
+
+image:
+  repository: "ghcr.io/jheckmanorg/copy_paste"
+  pullPolicy: Always
+  tag: "latest"
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+postgresql:
+  enabled: true
+  auth:
+    database: copy_paste
+    username: copy_paste
+    existingSecret: "copy-paste-postgresql-auth"  # Use a fixed name for the secret
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+      # Add annotations to ensure volume is retained
+      annotations:
+        "helm.sh/resource-policy": keep
+
+env:
+  - name: DJANGO_SETTINGS_MODULE
+    value: "copy_paste.settings"
+  - name: DJANGO_SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: copy-paste-secrets
+        key: django-secret-key
+  - name: CSRF_TRUSTED_ORIGINS
+    value: "CHANGEME"
+  - name: ALLOWED_HOSTS
+    value: "CHANGEME"
+  - name: POSTGRES_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: "copy-paste-postgresql-auth"
+        key: "password"
+
+secrets:
+  django:
+    secretKey: "changeme"  # Required: Must be set during deployment
+
+# Convert the old cronjobs format to the new cronJobs list format
+cronJobs:
+  - name: delete-expired-pastes
+    schedule: "* * * * *"  # Run once an hour, at the beginning of each hour
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        export DATABASE_URL="postgresql://copy_paste:$POSTGRES_PASSWORD@copy-paste-postgresql:5432/copy_paste"
+        python manage.py delete_expired_pastes
+    env:
+      - name: DJANGO_SETTINGS_MODULE
+        value: "copy_paste.settings"
+      - name: DJANGO_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: copy-paste-secrets
+            key: django-secret-key
+      - name: ALLOWED_HOSTS
+        value: "*"
+      - name: POSTGRES_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: "copy-paste-postgresql-auth"
+            key: "password"
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+# Add initialization job configuration
+initJob:
+  command: ["/bin/sh", "-c"]
+  args:
+    - |
+      # Set up database connection
+      export DATABASE_URL="postgresql://copy_paste:$POSTGRES_PASSWORD@copy-paste-postgresql:5432/copy_paste"
+      echo "INIT DEBUG: DATABASE_URL=$DATABASE_URL"
+      python manage.py migrate
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Add liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /health/
+    port: http
+    httpHeaders:
+    - name: host
+      value: copypaste.jonhomelab.com
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /health/
+    port: http
+    httpHeaders:
+    - name: host
+      value: copypaste.jonhomelab.com
+  initialDelaySeconds: 5
+  periodSeconds: 5
+
+# Add command and args for the main container
+command: ["/bin/sh", "-c"]
+args:
+  - |
+    # Ensure we're using the same password as the init job
+    export DATABASE_URL="postgresql://copy_paste:$POSTGRES_PASSWORD@copy-paste-postgresql:5432/copy_paste"
+    echo "DEBUG: DATABASE_URL=$DATABASE_URL"
+    python -m gunicorn copy_paste.wsgi:application --bind 0.0.0.0:8000

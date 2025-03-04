@@ -1,0 +1,14 @@
+apiVersion: v2
+name: copy-paste
+description: A Helm chart for Copy Paste service
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+dependencies:
+  - name: homelab-helm-charts
+    version: "0.4.0"
+    repository: "https://jheckmanorg.github.io/homelab_helm_charts/"
+  - name: postgresql
+    version: "12.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
