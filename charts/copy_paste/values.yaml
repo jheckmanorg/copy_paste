@@ -5,7 +5,7 @@ imagePullSecrets: []
 image:
   repository: "ghcr.io/jheckmanorg/copy_paste"
   pullPolicy: Always
-  tag: "latest"
+  tag: "main"
 
 serviceAccount:
   create: true
@@ -131,7 +131,7 @@ livenessProbe:
     port: http
     httpHeaders:
     - name: host
-      value: copypaste.jonhomelab.com
+      value: chart-example.local
   initialDelaySeconds: 30
   periodSeconds: 10
 
@@ -141,7 +141,7 @@ readinessProbe:
     port: http
     httpHeaders:
     - name: host
-      value: copypaste.jonhomelab.com
+      value: chart-example.local
   initialDelaySeconds: 5
   periodSeconds: 5
 
